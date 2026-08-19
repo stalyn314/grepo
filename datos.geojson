@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "nombre": "Sitio Quito Norte", "tipo": "oro", "descripcion": "Punto de interés minero de ejemplo" },
+      "geometry": { "type": "Point", "coordinates": [-78.4678, -0.1807] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "nombre": "Sitio Cuenca Sur", "tipo": "cobre", "descripcion": "Punto de interés minero de ejemplo" },
+      "geometry": { "type": "Point", "coordinates": [-79.0045, -2.9006] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "nombre": "Sitio Guayaquil Este", "tipo": "plata", "descripcion": "Punto de interés minero de ejemplo" },
+      "geometry": { "type": "Point", "coordinates": [-79.8891, -2.1894] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "nombre": "Sitio Loja Central", "tipo": "oro", "descripcion": "Punto de interés minero de ejemplo" },
+      "geometry": { "type": "Point", "coordinates": [-79.2, -3.9931] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "nombre": "Sitio Riobamba", "tipo": "cobre", "descripcion": "Punto de interés minero de ejemplo" },
+      "geometry": { "type": "Point", "coordinates": [-78.6483, -1.6636] }
+    }
+  ]
+}

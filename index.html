@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Geoportal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: Arial, Helvetica, sans-serif; }
+  #app { display: flex; height: 100%; }
+  #sidebar {
+    width: 300px;
+    background: #b5713a;
+    color: #fff;
+    padding: 16px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  #sidebar h2 { margin-top: 0; font-size: 18px; }
+  #sidebar h3 { font-size: 14px; margin: 18px 0 6px; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 12px; }
+  #map { flex: 1; }
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 8px;
+    border: none;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .btn-blue { background: #1a3c6e; color: #fff; }
+  .btn-green { background: #2e8b57; color: #fff; }
+  .btn-red { background: #c0392b; color: #fff; }
+  select {
+    width: 100%;
+    padding: 8px;
+    border-radius: 4px;
+    border: none;
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    color: #222;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
+  th { background: #eee; }
+  #status {
+    background: rgba(0,0,0,0.2);
+    padding: 8px;
+    border-radius: 4px;
+    margin-top: 12px;
+    font-size: 13px;
+  }
+  #puntos-wrap { max-height: 180px; overflow-y: auto; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sidebar">
+    <h2>Mi geoportal</h2>
+
+    <h3>Filtrar capa</h3>
+    <select id="filtroTipo">
+      <option value="todos">Todos los tipos</option>
+    </select>
+
+    <h3>Captura de puntos</h3>
+    <button id="btnActivar" class="btn btn-blue">Activar captura</button>
+    <p id="modoTexto" style="font-size:13px; opacity:0.85;">Haz clic en "Activar captura" y luego clic en el mapa.</p>
+
+    <div id="puntos-wrap">
+      <table id="tablaPuntos">
+        <thead><tr><th>#</th><th>Lat</th><th>Lon</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <button id="btnLimpiar" class="btn btn-red" style="margin-top:8px;">Limpiar puntos</button>
+    <button id="btnExportar" class="btn btn-green">Exportar CSV</button>
+
+    <div id="status">Cargando datos...</div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script>
+  const map = L.map('map').setView([-1.5, -78.5], 6);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }).addTo(map);
+
+  // ---------- CARGA DE GEOJSON Y FILTROS ----------
+  let geojsonData;
+  let capaActual;
+  const selectFiltro = document.getElementById('filtroTipo');
+  const statusDiv = document.getElementById('status');
+
+  function estiloPorTipo(tipo) {
+    const colores = { oro: '#f2b705', cobre: '#c0642b', plata: '#9aa3ad' };
+    return {
+      radius: 7,
+      fillColor: colores[tipo] || '#1a3c6e',
+      color: '#222',
+      weight: 1,
+      fillOpacity: 0.85
+    };
+  }
+
+  function dibujarCapa(data) {
+    if (capaActual) map.removeLayer(capaActual);
+    capaActual = L.geoJSON(data, {
+      pointToLayer: (feature, latlng) => L.circleMarker(latlng, estiloPorTipo(feature.properties.tipo)),
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties;
+        layer.bindPopup(`<b>${p.nombre}</b><br>Tipo: ${p.tipo}<br>${p.descripcion || ''}`);
+      }
+    }).addTo(map);
+  }
+
+  fetch('datos.geojson')
+    .then(res => res.json())
+    .then(data => {
+      geojsonData = data;
+      dibujarCapa(geojsonData);
+
+      // Llenar el select con los tipos únicos encontrados en el geojson
+      const tipos = [...new Set(data.features.map(f => f.properties.tipo))];
+      tipos.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        selectFiltro.appendChild(opt);
+      });
+
+      statusDiv.textContent = `${data.features.length} elemento(s) cargado(s)`;
+    })
+    .catch(() => {
+      statusDiv.textContent = 'No se pudo cargar datos.geojson';
+    });
+
+  selectFiltro.addEventListener('change', () => {
+    const valor = selectFiltro.value;
+    if (valor === 'todos') {
+      dibujarCapa(geojsonData);
+      return;
+    }
+    const filtrado = {
+      ...geojsonData,
+      features: geojsonData.features.filter(f => f.properties.tipo === valor)
+    };
+    dibujarCapa(filtrado);
+  });
+
+  // ---------- CAPTURA DE PUNTOS ----------
+  let capturaActiva = false;
+  let puntos = [];
+
+  const btnActivar = document.getElementById('btnActivar');
+  const btnLimpiar = document.getElementById('btnLimpiar');
+  const btnExportar = document.getElementById('btnExportar');
+  const tbody = document.querySelector('#tablaPuntos tbody');
+  const modoTexto = document.getElementById('modoTexto');
+
+  btnActivar.addEventListener('click', () => {
+    capturaActiva = !capturaActiva;
+    btnActivar.textContent = capturaActiva ? 'Desactivar captura' : 'Activar captura';
+    modoTexto.textContent = capturaActiva
+      ? 'Captura activa. Haz clic en el mapa para agregar puntos.'
+      : 'Haz clic en "Activar captura" y luego clic en el mapa.';
+    map.getContainer().style.cursor = capturaActiva ? 'crosshair' : '';
+  });
+
+  map.on('click', (e) => {
+    if (!capturaActiva) return;
+    const lat = e.latlng.lat;
+    const lon = e.latlng.lng;
+    const marker = L.marker([lat, lon]).addTo(map);
+    marker.bindPopup(`Punto ${puntos.length + 1}<br>Lat: ${lat.toFixed(6)}<br>Lon: ${lon.toFixed(6)}`);
+    puntos.push({ lat, lon, marker });
+    actualizarTabla();
+  });
+
+  function actualizarTabla() {
+    tbody.innerHTML = '';
+    puntos.forEach((p, i) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${i + 1}</td><td>${p.lat.toFixed(5)}</td><td>${p.lon.toFixed(5)}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  btnLimpiar.addEventListener('click', () => {
+    puntos.forEach(p => map.removeLayer(p.marker));
+    puntos = [];
+    actualizarTabla();
+  });
+
+  btnExportar.addEventListener('click', () => {
+    if (!puntos.length) {
+      alert('No hay puntos para exportar.');
+      return;
+    }
+    let csv = '#,Lat,Lon\n';
+    puntos.forEach((p, i) => { csv += `${i + 1},${p.lat},${p.lon}\n`; });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'puntos_geoportal.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+</script>
+</body>
+</html>
